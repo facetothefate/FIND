@@ -1,0 +1,49 @@
+<html>
+    <head></head>
+    <body>
+        <div id ="basicUsage"></div>
+        <script src="../dist/build/find.js"></script>
+        <script>
+            let data = { 
+                foo : 1,
+                bar : 2
+            }
+            updatefoo = (event) => {
+                data.foo = data.foo + 1;
+            };
+            let pipline = FIND.Pipline({
+                foo : (data, element) => {
+                    if (!element) {
+                        let tag = document.createElement("button");
+                        tag.innerText = `foo : ${data}`;
+                        tag.onclick = updatefoo;
+                        return tag;
+                    } else {
+                        element.innerText = `foo-update : ${data}`;
+                        return element;
+                    }
+                },
+                bar : (data, element) => {
+                    if (!element) {
+                        let tag = document.createElement("p");
+                        tag.innerHTML = `<h4> bar : ${data}</h4>`;
+                        return tag;
+                    } else {
+                        element.innerHTML = `<h4> bar-update :${data}</h4>`;
+                        return element;
+                    }
+                }
+            },["foo", "bar"])
+            .outter("div",{})
+            .append("h1", {}, "Hello world")
+            .outter("div",{class:"test"});
+
+            
+            data = pipline.bind(data).inject(document.getElementById("basicUsage")).model();
+
+        </script>
+
+        <div id="svg">
+        </div>
+    </body>
+</html>
