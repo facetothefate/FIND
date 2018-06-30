@@ -1,7 +1,13 @@
-import PiplineClass from "../src/Pipline"
+import PipelineClass from "../src/Pipeline"
+import {createElement} from "./DomCollection";
 
-function Pipline() {
-    return new PiplineClass(...arguments);
+
+function Pipeline() {
+    return new PipelineClass(...arguments);
 }
 
-export {Pipline};
+function element(tagName, tagAttrs) {
+    return createElement(tagName, tagAttrs);
+}
+
+export {Pipeline, element}; 

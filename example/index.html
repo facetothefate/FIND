@@ -11,35 +11,41 @@
             updatefoo = (event) => {
                 data.foo = data.foo + 1;
             };
-            let pipline = FIND.Pipline({
-                foo : (data, element) => {
-                    if (!element) {
-                        let tag = document.createElement("button");
-                        tag.innerText = `foo : ${data}`;
-                        tag.onclick = updatefoo;
-                        return tag;
-                    } else {
-                        element.innerText = `foo-update : ${data}`;
-                        return element;
+            let pipeline = FIND.Pipeline([
+                [
+                    "foo" , (data, element) => {
+                        if (!element) {
+                            let tag = FIND.element("button", {
+                                text : `foo : ${data}`
+                            });
+                            tag.onclick = updatefoo;
+                            return tag;
+                        } else {
+                            element.innerText = `foo-update : ${data}`;
+                            return element;
+                        }
                     }
-                },
-                bar : (data, element) => {
-                    if (!element) {
-                        let tag = document.createElement("p");
-                        tag.innerHTML = `<h4> bar : ${data}</h4>`;
-                        return tag;
-                    } else {
-                        element.innerHTML = `<h4> bar-update :${data}</h4>`;
-                        return element;
+                ],
+                [
+                    "bar", (data, element) => {
+                        if (!element) {
+                            let tag = FIND.element("h4", {
+                                text : `bar : ${data}`
+                            });
+                            return tag;
+                        } else {
+                            element.innerHTML = `<h4> bar-update :${data}</h4>`;
+                            return element;
+                        }
                     }
-                }
-            },["foo", "bar"])
+                ]
+            ])
             .outter("div",{})
-            .append("h1", {}, "Hello world")
+            .prepend("h1", {text:"Hello world"})
             .outter("div",{class:"test"});
 
             
-            data = pipline.bind(data).inject(document.getElementById("basicUsage")).model();
+            data = pipeline.bind(data).inject(document.getElementById("basicUsage")).model();
 
         </script>
 

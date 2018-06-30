@@ -120,23 +120,30 @@ class ArrayInmmutabel extends InmmutabelInterface {
 }
 
 class ComplexInmmutabel extends InmmutabelInterface {
+
+    /*
+     * Renders an array:
+     *  [[key, renderfunc], [key, renderfuc]]
+     *  or it can be even nested
+     *  [[key, [subkey, renderfunc]]]
+     */
     constructor(data, renders) {
         super();
         if (getShape(data) !== Shapes.COMPLEX) {
             throw Error(`${JSON.stringify(data)} is not a complex data`);
         }
 
-        this.content = {};
+        this.content = new Map();
         this.history = [];
         this.deleteHistory = [];
         this.version = 0;
-        this.renders = renders;
+        this.renders = new Map(renders);
+        let initVersion = new Map();
 
-        let initVersion = {};
-        Object.keys(data).forEach(
-            (key) => {
-                this.content[key] = createInmmu(data[key], this.renders[key]);
-                initVersion[key] = 0;   
+        this.renders.forEach(
+            (renderSet, key) => {
+                this.content.set(key, createInmmu(data[key], renderSet));
+                initVersion.set(key, 0);   
             }
         );
         this.history.push(initVersion);
@@ -146,47 +153,56 @@ class ComplexInmmutabel extends InmmutabelInterface {
 
     createProxy(data) {
         return new Proxy(data, {
-            get: (target, key) => this.content[key].get(),
+            get: (target, key) => {
+                // we don't care this prop
+                if (!this.renders.has(key)) {
+                    return target[key];
+                }
+                return this.content.get(key).get();
+            },
             set: (target, key, value) => {
+                if (!this.renders.has(key)) {
+                    // we don't care this prop
+                    target[key] = value;
+                    return;
+                }
                 let currentVersion = this.history[this.version];
-                if (key in this.content) {
-                    this.content[key].set(value);
-                    let keyVer = this.content[key].getVersion();
+                if (this.content.has(key)) {
+                    this.content.get(key).set(value);
+                    let keyVer = this.content.get(key).getVersion();
                     if (currentVersion[key] !== keyVer) {
                         // this is could be a new version, or we get back to a history
                         for (let i = 0; i < this.history.length; i += 1) {
-                            if (this.history[i][key] === keyVer) {
+                            if (this.history[i].get(key) === keyVer) {
                                 this.version = i;
                                 return;
                             }
                         }
-
                         // this is a new version
-                        this.history.push({});
+                        this.history.push(new Map());
                         let verSet = this.history[this.history.length - 1];
                         Object.assign(verSet, currentVersion);
-                        verSet[key] = keyVer;
+                        verSet.set(key, keyVer);
                         this.version = this.history.length - 1;
                     }
                     return;
                 }
                 // this is a new key
-                this.content[key] = createInmmu(value, this.renders[key]);
-                this.history.push({});
+                this.content.set(key ,createInmmu(value, this.renders[key]));
+                this.history.push(new Map());
                 let verSet = this.history[this.history.length - 1];
                 Object.assign(verSet, currentVersion);
-                verSet[key] = keyVer;
+                verSet.set(key, keyVer);
                 this.version = this.history.length - 1;
-
             },
             deleteProperty : (target, key) => {
-                if (key in this.content) {
-                    this.content[key].delete();
-                    let keyVer = this.content[key].getVersion();
-                    if (currentVersion[key] !== keyVer) {
+                if (this.content.has(key)) {
+                    this.content.get(key).delete();
+                    let keyVer = this.content.get(key).getVersion();
+                    if (currentVersion.get(key) !== keyVer) {
                         // this is could be a new version, or we get back to a history
                         for (let i = 0; i < this.history.length; i += 1) {
-                            if (this.history[i][key] === keyVer) {
+                            if (this.history[i].get(key) === keyVer) {
                                 this.version = i;
                                 return;
                             }
@@ -196,7 +212,7 @@ class ComplexInmmutabel extends InmmutabelInterface {
                         this.history.push({});
                         let verSet = this.history[this.history.length - 1];
                         Object.assign(verSet, currentVersion);
-                        verSet[key] = keyVer;
+                        verSet.set(key, keyVer);
                         this.version = this.history.length - 1;
                     }
                     return;
@@ -209,10 +225,10 @@ class ComplexInmmutabel extends InmmutabelInterface {
 
     get() {
         let res = {}
-        Object.keys(this.history[this.version]).forEach(
-            (key) => {
-                if (!this.content[key].isDelete()) {
-                    res[key] = this.content[key].get();
+        this.history[this.version].forEach(
+            (v, key) => {
+                if (!this.content.get(key).isDelete()) {
+                    res.set(key, this.content.get(key).get());
                 }
             }
         );
@@ -220,23 +236,25 @@ class ComplexInmmutabel extends InmmutabelInterface {
     }
 
     set(data) {
-        let verSet = {};
-        Object.keys(this.history[this.version]).forEach(
-            (key) => {
+        let verSet = new Map();
+        this.history[this.version].forEach(
+            (v, key) => {
                 if (!key in data) {
-                    this.content[key].delete();
-                    verSet[key] = this.content[key].getVersion();
+                    this.content.get(key).delete();
+                    verSet.set(key, this.content.get(key).getVersion());
                 }
             }
         );
         this.createProxy(data);
-        Object.keys(data).forEach((key) => {
-            this.content[key].set(data[key]);
-            verSet[key] = this.content[key].getVersion();
-        });
+        this.renders.forEach(
+            (v,key) => {
+                this.content.get(key).set(data[key]);
+                verSet.set(key, this.content.get(key).getVersion());
+            }
+        );
 
         let currentVersion = this.history[this.version];
-        if (currentVersion.keys().length === verSet.keys().length) {
+        if (currentVersion.size === verSet.size) {
             for (let i = 0; i < currentVersion.length; i +=1) {
                 if (currentVersion[key] !== verSet[key]) {
                     // a new version
@@ -255,25 +273,14 @@ class ComplexInmmutabel extends InmmutabelInterface {
         return this.version;
     }
 
-    getRendered(order) {
+    getRendered() {
         let res = [];
         let currentVersion = this.history[this.version];
-        if (order) {
-            order.forEach((key)=>{
-                let shape = getShape(key);
-                if (shape === Shapes.SIMPLE && key in currentVersion) {
-                    res.push(this.content[key].getRendered());
-                } else if (shape === Shapes.COMPLEX && key.key in currentVersion) {
-                    res.join(this.content[key].getRendered(key.order));
-                }
-            });
-        } else {
-            currentVersion.forEach((key)=>{
-                if (key in currentVersion) {
-                    res.push(this.content[key].getRendered());
-                }
-            });
-        }
+        currentVersion.forEach(
+            (v, key)=>{
+                res.push(this.content.get(key).getRendered());
+            }
+        );
         return res;
     }
 

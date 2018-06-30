@@ -1,4 +1,4 @@
-import DomCollection from "./DomCollection";
+import {DomCollection} from "./DomCollection";
 import createInmmu from "./ImmuTypes";
 
 class Pipeline {
@@ -20,6 +20,11 @@ class Pipeline {
         return this;
     }
 
+    prepend(tagName, tagAttrs) {
+        this.rootCollection.prepend(tagName, tagAttrs);
+        return this;
+    }
+    
     bind(data) {
         // data will then be proxied
         this.data = data;
