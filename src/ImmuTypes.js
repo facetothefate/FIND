@@ -46,6 +46,10 @@ class InmmutabelInterface {
     getVersion() {
         throw Error("Not done");
     }
+
+    getRendered() {
+        throw Error("Not done");
+    }
 }
 
 class SimpleInmmutabel extends InmmutabelInterface{
@@ -106,6 +110,10 @@ class SimpleInmmutabel extends InmmutabelInterface{
 
     doRender() {
         let elem = this.render(this.get(), this.elem);
+        if (!this.elem) {
+            this.elem = elem;
+            return;
+        }
         if (elem !== this.elem) {
             const p = this.elem.parent;
             p.remove(this.elem);
@@ -141,13 +149,15 @@ class ArrayInmmutabel extends InmmutabelInterface {
         this.renders.forEach(
             (renderSet, key) => {
                 if (key === "*") {
-                    for (let i = 0; i < this.content.length; i+=1) {
+                    for(let i = 0; i < data.length; i+=1) {
                         if (false === i in this.settedRenders) {
                             this.content[i] = createInmmu(data[i], renderSet);
+                            this.currentVersion[i] = 0;
                         }
                     }
                 } else if (Number.isInteger(key)) {
-                    this.content[key] = createInmmu(data[i], renderSet);
+                    this.content[key] = createInmmu(data[key], renderSet);
+                    this.currentVersion[i] = 0;
                     this.settedRenders[key] = true;
                 }
 
@@ -268,11 +278,8 @@ class ArrayInmmutabel extends InmmutabelInterface {
                 if (changed) {
                     this.version += 1;
                 }
-
             },
         }
-
-        
     }
 
     createProxy(data) {
@@ -308,7 +315,9 @@ class ArrayInmmutabel extends InmmutabelInterface {
                         render = this.renders.get("*");
                     }
                     if (render) {
-
+                        this.content[key] = createInmmu(value, render);
+                        this.currentVersion[key] = 0;
+                        cthis.version += 1;
                     }
                 }
                                
@@ -337,15 +346,30 @@ class ArrayInmmutabel extends InmmutabelInterface {
             throw Error(`${JSON.stringify(data)} is not an array data`);
         }
         if (data.length !== this.content.length){
-            // length changed, will need create new one
+            // length changed, will need to sync the length first
+            for (let i = this.content.length; i < data.length; i+=1) {
+                this.arrayFunc.push(data[i]);
+            }
 
-        } else {
-            this.content.forEach((elem, index)=>{
-                if (elem) {
-                    elem.set(data[index]);
-                }
-            });
+            for(let i = this.data.length; i < this.content.length; i+=1) {
+                this.arrayFunc.pop();
+            }
         }
+        this.content.forEach((elem, index)=>{
+            if (elem) {
+                elem.set(data[index]);
+            }
+        });
+    }
+
+    getRendered() {
+        let res = [];
+        this.currentVersion.forEach(
+            (v, index)=>{
+                res.push(this.content[index].getRendered());
+            }
+        );
+        return res;
     }
 
     model() {
@@ -380,7 +404,7 @@ class ComplexInmmutabel extends InmmutabelInterface {
                     return;
                 }
                 this.content.set(key, createInmmu(data[key], renderSet));
-                currentVersion.set(key, 0);   
+                this.currentVersion.set(key, 0);   
             }
         );
         this.dataModel = this.createProxy(data);
@@ -404,7 +428,7 @@ class ComplexInmmutabel extends InmmutabelInterface {
                 if (this.content.has(key)) {
                     this.content.get(key).set(value);
                     if (this.currentVersion.get(key) !== this.content.get(key).getVersion()) {
-                        this.currentVersion.get(key) = this.content.get(key).getVersion();
+                        this.currentVersion.set(key, this.content.get(key).getVersion());
                         this.version += 1;
                     }
                     return;

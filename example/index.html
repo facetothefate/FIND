@@ -1,7 +1,7 @@
 <html>
     <head></head>
     <body>
-        <div id ="basicUsage"></div>
+        <div id ="basicUsageObject"></div>
         <script src="../dist/build/find.js"></script>
         <script>
             let data = { 
@@ -41,15 +41,26 @@
                 ]
             ])
             .outter("div",{})
-            .prepend("h1", {text:"Hello world"})
+            .prepend("h1", {text:"Object binding"})
             .outter("div",{class:"test"});
 
             
-            data = pipeline.bind(data).inject(document.getElementById("basicUsage")).model();
+            data = pipeline.bind(data).inject(document.getElementById("basicUsageObject")).model();
 
         </script>
 
-        <div id="svg">
+        <div id="basicUsageArray">
         </div>
+        <script>
+            let arrayData = [1,2,3];
+            let arrayPipeline = FIND.Pipeline([
+                ["*", (data) => FIND.element("li",{text:data})]
+            ])
+            .outter("ul",{})
+            .prepend("h1", {text:"Array binding"})
+            .outter("div",{})
+            .bind(arrayData)
+            .inject(document.getElementById("basicUsageArray"));
+        </script>
     </body>
 </html>
