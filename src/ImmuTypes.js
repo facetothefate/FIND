@@ -5,8 +5,6 @@ const Shapes = Object.freeze({
     SIMPLE : Symbol('simple')
 }); 
 
-const MaxHistory = 1000;
-
 function getShape(data) {
     if (Array.isArray(data)) {
         return Shapes.ARRAY;
@@ -57,36 +55,34 @@ class SimpleInmmutabel extends InmmutabelInterface{
             throw Error(`${JSON.stringify(data)} is not a simple data`);
         }
 
-        this.history = [data];
+        this.currentData = data;
         this.deleteVerison = null;
         this.version = 0;
         this.render = render;
-        this.elem = this.render(data, undefined);
+        this.elem = null;
+        this.doRender();
     }
     get() {
         if (this.version === this.deleteVerison) {
             return undefined;
         }
-        return this.history[this.version];
+        return this.currentData;
     }
 
     set(data) {
-        this.elem = this.render(data, this.elem);
-        for (let i = 0; i < this.history.length; i += 1) {
-            if (this.history[i] === data) {
-                this.version = index;
-                return;
-            }
+        if (this.currentData === data) {
+            return;
         }
-        this.history.push(data);
-        this.version = this.history.length - 1;
+        this.currentData = data;
+        this.doRender();
+        this.version += 1;
     }
 
     delete() {
+        // just record it's been deleted
         if (this.deleteVerison !== null) {
             this.version = this.deleteVerison;
         } else {
-            this.history.push(undefined);
             this.deleteVerison = this.history.length - 1;
         }
     }
@@ -99,23 +95,261 @@ class SimpleInmmutabel extends InmmutabelInterface{
         return this.version;
     }
 
-    setVersion(ver) {
-        this.version = ver;
-    }
-
     getRendered() {
         return this.elem;
     }
 
     bind(render) {
         this.render = render;
+        this.doRender();
+    }
+
+    doRender() {
+        let elem = this.render(this.get(), this.elem);
+        if (elem !== this.elem) {
+            const p = this.elem.parent;
+            p.remove(this.elem);
+            p.append(elem);
+        }
+        this.elem = elem;
     }
 } 
 
 
 class ArrayInmmutabel extends InmmutabelInterface {
-    constructor(data, render) {
+    constructor(data, renders) {
         super();
+        if (getShape(data) !== Shapes.ARRAY) {
+            throw Error(`${JSON.stringify(data)} is not an array data`);
+        }
+        this.content = [];
+        this.currentVersion = [];
+        this.keptVer = 0;
+        this.version = 0;
+        this.data = data;
+        if (renders) {
+            
+        }
+        this.renders = new Map(renders);
+        this.settedRenders = {};
+        // the renders format should like this:
+        // [ 
+        //    [<number>/"*", <renderSet>]
+        // ]
+        // * will be a wildcard, matches all other index
+        // <number> will match speicifc index
+        this.renders.forEach(
+            (renderSet, key) => {
+                if (key === "*") {
+                    for (let i = 0; i < this.content.length; i+=1) {
+                        if (false === i in this.settedRenders) {
+                            this.content[i] = createInmmu(data[i], renderSet);
+                        }
+                    }
+                } else if (Number.isInteger(key)) {
+                    this.content[key] = createInmmu(data[i], renderSet);
+                    this.settedRenders[key] = true;
+                }
+
+                // another key we ignore
+            }
+        );
+
+        this.arrayFunc = {
+            fill:(value, s, e) => {
+                let start = s ? s : 0;
+                let end = e ? e : this.content.length;
+                let changed = false;
+
+                for (let i = start; i <= end && i < this.content.length; i+=1) {
+                    if (this.content[i]) {
+                        this.content[i].set(value);
+                        if (this.content[i].getVersion() !== this.currentVersion[i]) {
+                            changed = true;
+                            this.currentVersion[i] = this.content.getVersion();
+                        }
+                    }
+                }
+                if (changed) {
+                    this.version += 1;
+                }
+            },
+            push:() => {
+                for (let i = 0; i < arguments.length; i+=1) {
+                    let render = this.renders.get(i);
+                    if (!render) {
+                        render = this.renders.get("*");
+                    }
+                    if (render) {
+                        this.content.push(createInmmu(arguments[i], this.renders.get(i)));
+                        this.currentVersion.push(0);
+                    }
+                }
+                if (arguments.length) {
+                    this.version += 1;
+                }
+            },
+            pop:() => {
+                this.currentVersion.pop();
+                const res = this.content.pop();
+                this.version += 1;
+                return res.get();
+            },
+            sort:() => {
+                this.content.sort();
+                this.currentVersion.sort();
+                this.version += 1;
+            },
+            reverse: () => {
+                this.content.reverse();
+                this.currentVersion.reverse();
+                this.version += 1;
+            },
+            shift:() => {
+                const res = this.content.shift();
+                this.currentVersion.shift();
+                // pos changed, need to rebind all the render again
+                this.content.forEach((elem, index)=>{
+                    let render = this.renders.get(index);
+                    if (!render) {
+                        render = this.renders.get("*");
+                    }
+                    if (render) {
+                        elem.bind(render);
+                    }
+                });
+                return res.shift();
+            },
+            unshift:() => {
+                let i = 0;
+                for (i = 0; i < arguments.length; i+=1) {
+                    let render = this.renders.get(i);
+                    if (!render) {
+                        render = this.renders.get("*");
+                    }
+                    if (render) {
+                        this.content.unshift(createInmmu(arguments[i], this.renders.get(i)));
+                        this.currentVersion.unshift(0);
+                    }
+                }
+                for ( ;i < this.content.length; i+= 1) {
+                    let render = this.renders.get(index);
+                    if (!render) {
+                        render = this.renders.get("*");
+                    }
+                    if (render) {
+                        this.content[i].bind(render);
+                    }
+                }
+                if (arguments.length) {
+                    this.version += 1;
+                }
+            },
+            splice:() => {
+                let start = arguments[0];
+                let changed = false;
+                this.content.splice(...arguments);
+                this.currentVersion.splice(...arguments);
+
+                for (let i = start; i < start + (arguments.length - 2); i += 1) {
+                    let render = this.renders.get(i);
+                    if (!render) {
+                        render = this.renders.get("*");
+                    }
+                    if (render) {
+                        this.content[i] = createInmmu(this.content[i], render);
+                        this.currentVersion[i] = 0;
+                        changed = true;
+                    } else {
+                        this.content[i] =  undefined;
+                    }
+                }
+
+                if (changed) {
+                    this.version += 1;
+                }
+
+            },
+        }
+
+        
+    }
+
+    createProxy(data) {
+        return new Proxy(data, {
+            get: (target, key) => {
+                if (Number.isInteger(key)) {
+                    // access array element
+                    if (this.content[key]) {
+                        return this.content[key].get();
+                    }
+                } else if (key === "length") {
+                    // access the length
+                    return this.content.length;
+                } else if (key in this.arrayFunc){
+                    // access the array function
+                    return this.arrayFunc[key];
+                } else {
+                    // other props we don't care
+                    return target[key];
+                }
+            },
+
+            set: (target, key, value) => {
+                let changed = false;
+                if (key < this.content.length && this.content[key]) {
+                    this.content[key].set(value);
+                    if (this.currentVersion[key] !== this.content[key].getVersion()) {
+                        this.version += 1;
+                    }
+                } else {
+                    let render = this.renders.get(key);
+                    if (!render) {
+                        render = this.renders.get("*");
+                    }
+                    if (render) {
+
+                    }
+                }
+                               
+            },
+        });
+    }
+
+    lazyValue() {
+        if (this.version !== this.keptVer) {
+            this.data = [];
+            this.content.forEach((elem, index)=>{
+                this.data[index] = elem.get();
+            });
+        }
+    }
+
+    get() {
+        this.lazyValue();
+        return this.data;
+    }
+
+
+    set(data) {
+        // don't allow declare a type first then change to another
+        if (getShape(data) !== Shapes.ARRAY) {
+            throw Error(`${JSON.stringify(data)} is not an array data`);
+        }
+        if (data.length !== this.content.length){
+            // length changed, will need create new one
+
+        } else {
+            this.content.forEach((elem, index)=>{
+                if (elem) {
+                    elem.set(data[index]);
+                }
+            });
+        }
+    }
+
+    model() {
+        return this.dataModel;
     }
 }
 
@@ -133,21 +367,22 @@ class ComplexInmmutabel extends InmmutabelInterface {
             throw Error(`${JSON.stringify(data)} is not a complex data`);
         }
 
+        this.data = data;
         this.content = new Map();
-        this.history = [];
-        this.deleteHistory = [];
         this.version = 0;
+        this.keptVer = 0;
         this.renders = new Map(renders);
-        let initVersion = new Map();
+        this.currentVersion = new Map();
 
         this.renders.forEach(
             (renderSet, key) => {
+                if (false === key in data) {
+                    return;
+                }
                 this.content.set(key, createInmmu(data[key], renderSet));
-                initVersion.set(key, 0);   
+                currentVersion.set(key, 0);   
             }
         );
-        this.history.push(initVersion);
-        this.deleteHistory.push(false);
         this.dataModel = this.createProxy(data);
     }
 
@@ -166,55 +401,25 @@ class ComplexInmmutabel extends InmmutabelInterface {
                     target[key] = value;
                     return;
                 }
-                let currentVersion = this.history[this.version];
                 if (this.content.has(key)) {
                     this.content.get(key).set(value);
-                    let keyVer = this.content.get(key).getVersion();
-                    if (currentVersion[key] !== keyVer) {
-                        // this is could be a new version, or we get back to a history
-                        for (let i = 0; i < this.history.length; i += 1) {
-                            if (this.history[i].get(key) === keyVer) {
-                                this.version = i;
-                                return;
-                            }
-                        }
-                        // this is a new version
-                        this.history.push(new Map());
-                        let verSet = this.history[this.history.length - 1];
-                        Object.assign(verSet, currentVersion);
-                        verSet.set(key, keyVer);
-                        this.version = this.history.length - 1;
+                    if (this.currentVersion.get(key) !== this.content.get(key).getVersion()) {
+                        this.currentVersion.get(key) = this.content.get(key).getVersion();
+                        this.version += 1;
                     }
                     return;
                 }
                 // this is a new key
-                this.content.set(key ,createInmmu(value, this.renders[key]));
-                this.history.push(new Map());
-                let verSet = this.history[this.history.length - 1];
-                Object.assign(verSet, currentVersion);
-                verSet.set(key, keyVer);
-                this.version = this.history.length - 1;
+                this.content.set(key, createInmmu(value, this.renders[key]));
+                this.currentVersion.set(key, this.content.get(key).getVersion());
+                this.version += 1;
+                
             },
             deleteProperty : (target, key) => {
                 if (this.content.has(key)) {
                     this.content.get(key).delete();
-                    let keyVer = this.content.get(key).getVersion();
-                    if (currentVersion.get(key) !== keyVer) {
-                        // this is could be a new version, or we get back to a history
-                        for (let i = 0; i < this.history.length; i += 1) {
-                            if (this.history[i].get(key) === keyVer) {
-                                this.version = i;
-                                return;
-                            }
-                        }
-
-                        // this is a new version
-                        this.history.push({});
-                        let verSet = this.history[this.history.length - 1];
-                        Object.assign(verSet, currentVersion);
-                        verSet.set(key, keyVer);
-                        this.version = this.history.length - 1;
-                    }
+                    this.currentVersion.delete(key);
+                    this.version += 1;
                     return;
                 } else {
                     throw new Error(`Cannot delete non existing key:${key}`);
@@ -223,50 +428,59 @@ class ComplexInmmutabel extends InmmutabelInterface {
         });
     }
 
-    get() {
-        let res = {}
-        this.history[this.version].forEach(
-            (v, key) => {
-                if (!this.content.get(key).isDelete()) {
-                    res.set(key, this.content.get(key).get());
+    lazyValue() {
+        if (this.version !== this.keptVer) {
+            this.data = {};
+            this.keptVer = this.version;
+            this.currentVersion.forEach(
+                (v, key) => {
+                    this.data[key] = this.content.get(key).get();
                 }
-            }
-        );
-        return res;
+            );
+        }
+    }
+
+    get() {
+        this.lazyValue();
+        return this.data;
     }
 
     set(data) {
-        let verSet = new Map();
-        this.history[this.version].forEach(
+        // don't allow declare a type first then change to another
+        if (getShape(data) !== Shapes.COMPLEX) {
+            throw Error(`${JSON.stringify(data)} is not a complex data`);
+        }
+
+        let changed = false;
+        this.renders.forEach(
             (v, key) => {
                 if (!key in data) {
                     this.content.get(key).delete();
-                    verSet.set(key, this.content.get(key).getVersion());
+                    this.currentVersion.delete(key);
+                    changed = true;
                 }
             }
         );
-        this.createProxy(data);
+        
         this.renders.forEach(
             (v,key) => {
+                if (false === key in data) {
+                    return;
+                }
                 this.content.get(key).set(data[key]);
-                verSet.set(key, this.content.get(key).getVersion());
+                const ver = this.content.get(key).getVersion();
+                if (ver !== this.currentVersion.get(key)) {
+                    this.currentVersion.set(key, ver);
+                    changed = true;
+                }
             }
         );
 
-        let currentVersion = this.history[this.version];
-        if (currentVersion.size === verSet.size) {
-            for (let i = 0; i < currentVersion.length; i +=1) {
-                if (currentVersion[key] !== verSet[key]) {
-                    // a new version
-                    this.history.push(verSet);
-                    this.version = this.history.length-1;
-                    break;
-                }
-            }
-        } else {
-            this.history.push(verSet);
-            this.version = this.history.length-1;
+        if (changed) {
+            this.version += 1;
         }
+
+        this.dataModel = this.createProxy(data);
     }
 
     getVersion() {
@@ -275,13 +489,21 @@ class ComplexInmmutabel extends InmmutabelInterface {
 
     getRendered() {
         let res = [];
-        let currentVersion = this.history[this.version];
-        currentVersion.forEach(
+        this.currentVersion.forEach(
             (v, key)=>{
                 res.push(this.content.get(key).getRendered());
             }
         );
         return res;
+    }
+
+    bind(renders) {
+        this.renders = renders;
+        this.renders.forEach(
+            (v,key) => {
+                this.content.get(key).bind(v);
+            }
+        );
     }
 
     model() {
