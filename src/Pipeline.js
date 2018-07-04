@@ -1,5 +1,5 @@
 import {DomCollection} from "./DomCollection";
-import createInmmu from "./ImmuTypes";
+import createImmu from "./ImmuTypes";
 
 class Pipeline {
     constructor(renderAssignment) {
@@ -35,7 +35,7 @@ class Pipeline {
         }
         this.data = data;
         if (!this.content) {  
-            this.content = createInmmu(data, this.renderAssignment);
+            this.content = createImmu(data, this.renderAssignment);
             this.content.bindCollection(this.initCollection);
         } else {
             this.content.set(data);

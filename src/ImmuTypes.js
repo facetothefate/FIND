@@ -17,28 +17,28 @@ function getShape(data) {
     return Shapes.SIMPLE;
 }
 
-function createInmmu(value, render) {
+function createImmu(value, render) {
     let vshape = getShape(value);
     let rshape = getShape(render);
     switch (vshape) {
         case Shapes.ARRAY:
-            return new ArrayInmmutabel(value, render);
+            return new ArrayImmutabel(value, render);
         case Shapes.COMPLEX:
             // if user gives out a speific key, then we create as a complex
             // if user wish to use the whole object as a single value we create as a simple
             // which makes the following can happen:
             // <div> data.body </div>
             if (rshape === Shapes.ARRAY) {
-                return new ComplexInmmutabel(value, render);
+                return new ComplexImmutabel(value, render);
             } else if (rshape === Shapes.FUNCTION) {
-                return new SimpleInmmutabel(value, render);
+                return new SimpleImmutabel(value, render);
             }
         default:
-            return new SimpleInmmutabel(value, render);
+            return new SimpleImmutabel(value, render);
     }
 }
 
-class InmmutabelInterface {
+class ImmutabelInterface {
     get() {
         throw Error("Not done");
     }
@@ -64,7 +64,7 @@ class InmmutabelInterface {
     }
 }
 
-class SimpleInmmutabel extends InmmutabelInterface{
+class SimpleImmutabel extends ImmutabelInterface{
     constructor(data, render) {
         super();
         if (getShape(render) !== Shapes.FUNCTION) {
@@ -142,7 +142,7 @@ class SimpleInmmutabel extends InmmutabelInterface{
 } 
 
 
-class ArrayInmmutabel extends InmmutabelInterface {
+class ArrayImmutabel extends ImmutabelInterface {
     constructor(data, renders) {
         super();
         if (getShape(data) !== Shapes.ARRAY) {
@@ -175,12 +175,12 @@ class ArrayInmmutabel extends InmmutabelInterface {
                 if (key === "*") {
                     for(let i = 0; i < data.length; i+=1) {
                         if (false === i in this.settedRenders) {
-                            this.content[i] = createInmmu(data[i], renderSet);
+                            this.content[i] = createImmu(data[i], renderSet);
                             this.currentVersion[i] = 0;
                         }
                     }
                 } else if (Number.isInteger(key)) {
-                    this.content[key] = createInmmu(data[key], renderSet);
+                    this.content[key] = createImmu(data[key], renderSet);
                     this.currentVersion[i] = 0;
                     this.settedRenders[key] = true;
                 }
@@ -216,7 +216,7 @@ class ArrayInmmutabel extends InmmutabelInterface {
                         render = this.renders.get("*");
                     }
                     if (render) {
-                        this.content.push(createInmmu(arguments[i], this.renders.get(i)));
+                        this.content.push(createImmu(arguments[i], this.renders.get(i)));
                         this.currentVersion.push(0);
                         diffs.push(this.content[this.content.length - 1]);
                     }
@@ -272,7 +272,7 @@ class ArrayInmmutabel extends InmmutabelInterface {
                         render = this.renders.get("*");
                     }
                     if (render) {
-                        this.content.unshift(createInmmu(arguments[i], this.renders.get(i)));
+                        this.content.unshift(createImmu(arguments[i], this.renders.get(i)));
                         this.currentVersion.unshift(0);
                         diffs.unshift(this.content[0].getRendered());
                     }
@@ -305,7 +305,7 @@ class ArrayInmmutabel extends InmmutabelInterface {
                         render = this.renders.get("*");
                     }
                     if (render) {
-                        this.content[i] = createInmmu(this.content[i], render);
+                        this.content[i] = createImmu(this.content[i], render);
                         this.currentVersion[i] = 0;
                         changed = true;
                     } else {
@@ -352,7 +352,7 @@ class ArrayInmmutabel extends InmmutabelInterface {
                         render = this.renders.get("*");
                     }
                     if (render) {
-                        this.content[key] = createInmmu(value, render);
+                        this.content[key] = createImmu(value, render);
                         this.currentVersion[key] = 0;
                         cthis.version += 1;
                         if (this.collection) {
@@ -424,7 +424,7 @@ class ArrayInmmutabel extends InmmutabelInterface {
     }
 }
 
-class ComplexInmmutabel extends InmmutabelInterface {
+class ComplexImmutabel extends ImmutabelInterface {
 
     /*
      * Renders an array:
@@ -450,7 +450,7 @@ class ComplexInmmutabel extends InmmutabelInterface {
                 if (false === key in data) {
                     return;
                 }
-                this.content.set(key, createInmmu(data[key], renderSet));
+                this.content.set(key, createImmu(data[key], renderSet));
                 this.currentVersion.set(key, 0);   
             }
         );
@@ -481,7 +481,7 @@ class ComplexInmmutabel extends InmmutabelInterface {
                     return;
                 }
                 // this is a new key
-                this.content.set(key, createInmmu(value, this.renders[key]));
+                this.content.set(key, createImmu(value, this.renders[key]));
                 this.currentVersion.set(key, this.content.get(key).getVersion());
                 this.version += 1;
                 
@@ -546,7 +546,7 @@ class ComplexInmmutabel extends InmmutabelInterface {
                         changed = true;
                     }
                 } else {
-                    this.content.set(key, createInmmu(data[key], this.renders[key]));
+                    this.content.set(key, createImmu(data[key], this.renders[key]));
                     this.currentVersion.set(key, 0);
                     if (this.collection) {
                         this.collection.add([this.content.get(key).getRendered()]);
@@ -598,4 +598,4 @@ class ComplexInmmutabel extends InmmutabelInterface {
 }
 
 
-export default createInmmu;
+export default createImmu;
