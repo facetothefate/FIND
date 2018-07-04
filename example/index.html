@@ -15,27 +15,21 @@
                 [
                     "foo" , (data, element) => {
                         if (!element) {
-                            let tag = FIND.element("button", {
+                            return FIND.element("button", {
                                 text : `foo : ${data}`
-                            });
-                            tag.onclick = updatefoo;
-                            return tag;
+                            }).on('click',updatefoo);
                         } else {
-                            element.innerText = `foo-update : ${data}`;
-                            return element;
-                        }
+                            return element.text(`foo-update : ${data}`);                        }
                     }
                 ],
                 [
                     "bar", (data, element) => {
                         if (!element) {
-                            let tag = FIND.element("h4", {
+                            return FIND.element("h4", {
                                 text : `bar : ${data}`
                             });
-                            return tag;
                         } else {
-                            element.innerHTML = `<h4> bar-update :${data}</h4>`;
-                            return element;
+                            return element.html(`<h4> bar-update :${data}</h4>`);
                         }
                     }
                 ]

@@ -1,14 +1,48 @@
 function createElement (tagName, tagAttrs) {
-    let tag = document.createElement(tagName);
-    Object.keys(tagAttrs).forEach(
-        (key) =>{
-            if (key === "text") {
-                tag.innerText = tagAttrs[key];
-            }
-            tag.setAttribute(key, tagAttrs[key]);
-        }
-    );
+    let tag = new DomNode(tagName, tagAttrs);
     return tag;
+}
+
+class DomNode {
+    constructor(tagName, tagAttrs) {
+        this.dom = document.createElement(tagName);
+        Object.keys(tagAttrs).forEach(
+            (key) =>{
+                if (key === "text") {
+                    this.dom.innerText = tagAttrs[key];
+                }
+                this.dom.setAttribute(key, tagAttrs[key]);
+            }
+        );
+    }
+
+    attr(key, value) {
+        this.dom.setAttribute(key, value);
+        return this;
+    }
+
+    on (event, callback) {
+        this.dom[`on${event}`] = callback;
+        return this;
+    }
+
+    text(value) {
+        this.dom.innerText = value;
+        return this;
+    }
+
+    html(value) {
+        this.dom.innerHtml = value;
+        return this;
+    }
+
+    append (child) {
+        this.dom.append(child.dom);
+    }
+
+    prepend (child) {
+        this.dom.prepend(child.dom);
+    }
 }
 
 class DomCollection {
