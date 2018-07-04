@@ -2,11 +2,10 @@ import {DomCollection} from "./DomCollection";
 import createInmmu from "./ImmuTypes";
 
 class Pipeline {
-    constructor(renderAssignment, order) {
+    constructor(renderAssignment) {
         this.collection = new DomCollection();
         this.initCollection = this.collection;
         this.renderAssignment = renderAssignment;
-        this.order = order;
         this.data = null;
     }
 
@@ -24,12 +23,23 @@ class Pipeline {
         this.collection.prepend(tagName, tagAttrs);
         return this;
     }
+
+    join(pipeline) {
+        pipeline.collection.add(this.collection.domNodes);
+        return this;
+    }
     
     bind(data) {
-        // data will then be proxied
+        if (this.initCollection === this.collection) {
+            throw Error("pipline should at least have one 'outter' element");
+        }
         this.data = data;
-        this.content = createInmmu(data, this.renderAssignment);
-        this.initCollection.add(this.content.getRendered(this.order));
+        if (!this.content) {  
+            this.content = createInmmu(data, this.renderAssignment);
+            this.content.bindCollection(this.initCollection);
+        } else {
+            this.content.set(data);
+        }
         return this;
     }
 
