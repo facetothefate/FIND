@@ -56,5 +56,49 @@
             .bind(arrayData)
             .inject(document.getElementById("basicUsageArray"));
         </script>
+
+        <div id="nestedArray">
+        </div>
+        <script>
+            let nestedArrayData = [
+                {
+                    title : "Title 1",
+                    body : "Body 1",
+                },
+                {
+                    title : "What a great Title!",
+                    body : "Body 2"
+                }
+            ];
+            let nestedArrayPipeline = FIND.Pipeline([
+                ["*",
+                    [
+                        ["title", 
+                            (data) => FIND.element("h4",{text:data})
+                        ],
+                        ["body",
+                            (data) => FIND.element("p",{text:data})
+                        ]
+                    ]
+                ]
+            ])
+            .outter("div")
+            .prepend("h1", {text:"Nested array and renders"})
+            .append("button",
+                {on:
+                    { 
+                        click: ()=>{
+                            let nestedArrayDataModel = nestedArrayPipeline.model();
+                            nestedArrayDataModel.push({
+                                title:"A new one",
+                                body:"This a new one"
+                            });
+                        }
+                    }, 
+                text:"add"})
+            .outter("div",{})
+            .bind(nestedArrayData)
+            .inject(document.getElementById("nestedArray"));
+        </script>
     </body>
 </html>

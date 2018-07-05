@@ -3,34 +3,32 @@ import {Shapes, getShape} from "./Shapes";
 
 
 // Factory method
-function createImmu(value, render, domCollection) {
+function createImmu(value, render) {
     let vshape = getShape(value);
     let rshape = getShape(render);
     switch (vshape) {
         case Shapes.ARRAY:
-            return new ArrayImmutabel(value, render, domCollection);
+            return new ArrayImmutabel(value, render);
         case Shapes.COMPLEX:
             // if user gives out a speific key, then we create as a complex
             // if user wish to use the whole object as a single value we create as a simple
             // which makes the following can happen:
             // <div> data.body </div>
             if (rshape === Shapes.ARRAY) {
-                return new ComplexImmutabel(value, render, domCollection);
+                return new ComplexImmutabel(value, render);
             } else if (rshape === Shapes.FUNCTION) {
-                return new SimpleImmutabel(value, render, domCollection);
+                return new SimpleImmutabel(value, render);
             }
         default:
-            return new SimpleImmutabel(value, render, domCollection);
+            return new SimpleImmutabel(value, render);
     }
 }
 
 class ImmutabelInterface {
-    constructor(collection) {
+    constructor() {
         this.collection = new DomCollection();
-        if (collection) {
-            collection.addSubCollection(this.collection);
-        }
     }
+
     get() {
         throw Error("Not done");
     }
@@ -55,21 +53,23 @@ class ImmutabelInterface {
     getRendered() {
         return this.collection;
     }
+
+    initRender() {
+        throw Error("Not done");
+    }
 }
 
 class SimpleImmutabel extends ImmutabelInterface{
-    constructor(data, render, collection) {
-        super(collection);
+    constructor(data, render) {
+        super();
         if (getShape(render) !== Shapes.FUNCTION) {
             throw Error(`Cannot bind ${JSON.stringify(data)} to a complex renderset`);
         }
-
         this.currentData = data;
         this.deleteVerison = null;
         this.version = 0;
         this.render = render;
         this.elem = null;
-        this.doRender();
     }
     get() {
         if (this.version === this.deleteVerison) {
@@ -107,9 +107,14 @@ class SimpleImmutabel extends ImmutabelInterface{
         this.doRender();
     }
 
+    initRender() {
+        this.doRender();
+    }
+
     doRender() {
         let elem = this.render(this.get(), this.elem);
         if (!this.elem) {
+            this.elem = elem;
             this.collection.add(this.elem);
             return;
         }
@@ -123,7 +128,7 @@ class SimpleImmutabel extends ImmutabelInterface{
 
 class ArrayImmutabel extends ImmutabelInterface {
     constructor(data, renders, collection) {
-        super(collection);
+        super();
         if (getShape(data) !== Shapes.ARRAY) {
             throw Error(`${JSON.stringify(data)} is not an array data`);
         }
@@ -139,30 +144,7 @@ class ArrayImmutabel extends ImmutabelInterface {
         this.version = 0;
         this.data = data;
         this.renders = new Map(renders);
-        this.settedRenders = {};
-        // the renders format should like this:
-        // [ 
-        //    [<number>/"*", <renderSet>]
-        // ]
-        // * will be a wildcard, matches all other index
-        // <number> will match speicifc index
-        this.renders.forEach(
-            (renderSet, key) => {
-                if (key === "*") {
-                    for(let i = 0; i < data.length; i+=1) {
-                        if (false === i in this.settedRenders) {
-                            this.content[i] = createImmu(data[i], renderSet, this.collection);
-                            this.currentVersion[i] = 0;
-                        }
-                    }
-                } else if (Number.isInteger(key)) {
-                    this.content[key] = createImmu(data[key], renderSet, this.collection);
-                    this.currentVersion[i] = 0;
-                    this.settedRenders[key] = true;
-                }
-                // another keys we ignore to save memory
-            }
-        );
+        this.dataModel = this.createProxy(data);
 
         this.arrayFunc = {
             fill:(value, s, e) => {
@@ -183,20 +165,19 @@ class ArrayImmutabel extends ImmutabelInterface {
                     this.version += 1;
                 }
             },
-            push:() => {
-                for (let i = 0; i < arguments.length; i+=1) {
-                    let render = this.renders.get(i);
-                    if (!render) {
-                        render = this.renders.get("*");
-                    }
-                    if (render) {
-                        this.content.push(createImmu(arguments[i], this.renders.get(i), this.collection));
-                        this.currentVersion.push(0);
-                    }
+            push:(data) => {
+                let render = this.renders.get(this.content.length);
+                if (!render) {
+                    render = this.renders.get("*");
                 }
-                if (arguments.length) {
-                    this.version += 1;
+                if (render) {
+                    const newImmu = createImmu(data, render);
+                    this.content.push(newImmu);
+                    this.currentVersion.push(0);
+                    this.collection.addSubCollection(newImmu.collection);
+                    newImmu.initRender();
                 }
+                this.version += 1;
             },
             pop:() => {
                 this.currentVersion.pop();
@@ -229,20 +210,19 @@ class ArrayImmutabel extends ImmutabelInterface {
                 res.delete();
                 return ret;
             },
-            unshift:() => {
-                // not support for now, need insert sub collection at the very beginning
-                /*
-                let i = 0;
-                for (i = 0; i < arguments.length; i+=1) {
-                    let render = this.renders.get(i);
-                    if (!render) {
-                        render = this.renders.get("*");
-                    }
-                    if (render) {
-                        this.content.unshift(createImmu(arguments[i], this.renders.get(i), this.collection));
-                        this.currentVersion.unshift(0);
-                    }
+            unshift:(data) => {
+                let render = this.renders.get(0);
+                if (!render) {
+                    render = this.renders.get("*");
                 }
+                if (render) {
+                    const newImmu = createImmu(data, render);
+                    this.content.unshift(newImmu);
+                    this.currentVersion.push(0);
+                    this.collection.offerSubCollection(newImmu.collection);
+                    newImmu.initRender();
+                }
+                this.version += 1;
                 for ( ;i < this.content.length; i+= 1) {
                     let render = this.renders.get(index);
                     if (!render) {
@@ -254,35 +234,66 @@ class ArrayImmutabel extends ImmutabelInterface {
                 }
                 if (arguments.length) {
                     this.version += 1;
-                }*/
+                }
             },
-            splice:() => {
-                // not support for now, need remove a sub collection from current collection
-                /*
-                let start = arguments[0];
+            splice:(start, deleteCount, data) => {
                 let changed = false;
-                this.content.splice(...arguments);
-                this.currentVersion.splice(...arguments);
-
-                for (let i = start; i < start + (arguments.length - 2); i += 1) {
-                    let render = this.renders.get(i);
-                    if (!render) {
-                        render = this.renders.get("*");
-                    }
-                    if (render) {
-                        this.content[i] = createImmu(this.content[i], render);
-                        this.currentVersion[i] = 0;
-                        changed = true;
-                    } else {
-                        this.content[i] =  undefined;
+                for (let i = start; i < start + deleteCount; i+=1) {
+                    if (this.content[i]) {
+                        this.content[i].delete();
                     }
                 }
+                this.version += 1;
+                this.content.splice(start, deleteCount);
+                this.currentVersion.splice(start, deleteCount);
 
-                if (changed) {
-                    this.version += 1;
-                }*/
+                let render = this.renders.get(i);
+                if (!render) {
+                    render = this.renders.get("*");
+                }
+                if (render) {
+                    // to-do need subcollection insert to the right pos instead of tail
+                    this.content[start + 1] = createImmu(data, render);
+                    this.currentVersion[start + 1] = 0;
+                    this.collection.addSubCollection(this.content[0].collection);
+                    this.content[start + 1].initRender();
+                    changed = true;
+                } else {
+                    this.content[i] =  undefined;
+                }
             },
         }
+    }
+
+    initRender() {
+        this.settedRenders = {};
+        // the renders format should like this:
+        // [ 
+        //    [<number>/"*", <renderSet>]
+        // ]
+        // * will be a wildcard, matches all other index
+        // <number> will match speicifc index
+        this.renders.forEach(
+            (renderSet, key) => {
+                if (key === "*") {
+                    for(let i = 0; i < this.data.length; i+=1) {
+                        if (false === i in this.settedRenders) {
+                            this.content[i] = createImmu(this.data[i], renderSet);
+                            this.currentVersion[i] = 0;
+                            this.collection.addSubCollection(this.content[i].collection);
+                            this.content[i].initRender();
+                        }
+                    }
+                } else if (Number.isInteger(key)) {
+                    this.content[key] = createImmu(this.data[key], renderSet);
+                    this.currentVersion[i] = 0;
+                    this.collection.addSubCollection(this.content[i].collection);
+                    this.content[i].initRender();
+                    this.settedRenders[key] = true;
+                }
+                // another keys we ignore to save memory
+            }
+        );
     }
 
     createProxy(data) {
@@ -311,7 +322,7 @@ class ArrayImmutabel extends ImmutabelInterface {
                     if (this.currentVersion[key] !== this.content[key].getVersion()) {
                         this.version += 1;
                     }
-                } else {
+                } else if (key >= this.content.length){
                     let render = this.renders.get(key);
                     if (!render) {
                         render = this.renders.get("*");
@@ -319,10 +330,9 @@ class ArrayImmutabel extends ImmutabelInterface {
                     if (render) {
                         this.content[key] = createImmu(value, render);
                         this.currentVersion[key] = 0;
-                        cthis.version += 1;
-                        if (this.collection) {
-                            this.collection.add(this.content[key].getRendered());
-                        }
+                        this.collection.addSubCollection(this.content[key].collection);
+                        this.content[key].initRender();
+                        this.version += 1;
                     }
                 }
                                
@@ -367,6 +377,16 @@ class ArrayImmutabel extends ImmutabelInterface {
         });
     }
 
+    delete() {
+        this.content.forEach((elem)=>{
+            elem.delete();
+        });
+        const parent = this.collection.parent;
+        if (parent) {
+            parent.removeSubCollection(this.collection);
+        }
+    }
+
     model() {
         return this.dataModel;
     }
@@ -381,7 +401,7 @@ class ComplexImmutabel extends ImmutabelInterface {
      *  [[key, [subkey, renderfunc]]]
      */
     constructor(data, renders, collection) {
-        super(collection);
+        super();
         if (getShape(data) !== Shapes.COMPLEX) {
             throw Error(`${JSON.stringify(data)} is not a complex data`);
         }
@@ -393,20 +413,22 @@ class ComplexImmutabel extends ImmutabelInterface {
         this.renders = new Map(renders);
         this.currentVersion = new Map();
         this.collection = new DomCollection();
+        this.dataModel = this.createProxy(data);
+    }
+
+    initRender() {
         this.renders.forEach(
             (renderSet, key) => {
-                if (false === key in data) {
+                if (false === key in this.data) {
                     return;
                 }
-                this.content.set(key, createImmu(data[key], renderSet, this.collection));
+                const newImmu = createImmu(this.data[key], renderSet);
+                this.content.set(key, newImmu);
                 this.currentVersion.set(key, 0);
-                let renderRes = this.content.get(key).getRendered();
-                if (renderRes) {
-                    this.collection.add(renderRes);
-                }
+                this.collection.addSubCollection(newImmu.collection);
+                newImmu.initRender();
             }
         );
-        this.dataModel = this.createProxy(data);
     }
 
     createProxy(data) {
@@ -433,8 +455,12 @@ class ComplexImmutabel extends ImmutabelInterface {
                     return;
                 }
                 // this is a new key
-                this.content.set(key, createImmu(value, this.renders[key], this.collection));
-                this.currentVersion.set(key, this.content.get(key).getVersion());
+                const newImmu = createImmu(value, renderSet);
+                this.content.set(key, newImmu);
+                this.currentVersion.set(key, 0);
+                // to-do need to find the right pos to insert the collection
+                this.collection.addSubCollection(newImmu.collection);
+                newImmu.initRender();
                 this.version += 1;
                 
             },
@@ -498,8 +524,11 @@ class ComplexImmutabel extends ImmutabelInterface {
                         changed = true;
                     }
                 } else {
-                    this.content.set(key, createImmu(data[key], this.renders[key], this.collection));
+                    const newImmu = createImmu(data[key], renderSet);
+                    this.content.set(key, newImmu);
                     this.currentVersion.set(key, 0);
+                    this.collection.addSubCollection(newImmu.collection);
+                    newImmu.initRender();
                 }
             }
         );
@@ -509,6 +538,16 @@ class ComplexImmutabel extends ImmutabelInterface {
         }
 
         this.dataModel = this.createProxy(data);
+    }
+
+    delete() {
+        this.content.forEach((elem)=>{
+            elem.delete();
+        });
+        const parent = this.collection.parent;
+        if (parent) {
+            parent.removeSubCollection(this.collection);
+        }
     }
 
     getVersion() {

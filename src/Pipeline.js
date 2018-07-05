@@ -35,7 +35,9 @@ class Pipeline {
         }
         this.data = data;
         if (!this.content) {  
-            this.content = createImmu(data, this.renderAssignment, this.initCollection);
+            this.content = createImmu(data, this.renderAssignment);
+            this.initCollection.addSubCollection(this.content.collection);
+            this.content.initRender();
         } else {
             this.content.set(data);
         }

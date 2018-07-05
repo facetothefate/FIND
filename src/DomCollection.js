@@ -17,14 +17,22 @@ function unpackDom (domNode) {
 class DomNode {
     constructor(tagName, tagAttrs) {
         this.dom = document.createElement(tagName);
-        Object.keys(tagAttrs).forEach(
-            (key) =>{
-                if (key === "text") {
-                    this.dom.innerText = tagAttrs[key];
+        if (tagAttrs) {
+            Object.keys(tagAttrs).forEach(
+                (key) =>{
+                    if (key === "text") {
+                        this.dom.innerText = tagAttrs[key];
+                    } else if (key === "on"){
+                        const eventHandler = tagAttrs[key];
+                        Object.keys(eventHandler).forEach((event)=>{
+                            this.dom[`on${event}`] = tagAttrs[key][event];
+                        });
+                    } else {
+                        this.dom.setAttribute(key, tagAttrs[key]);
+                    }
                 }
-                this.dom.setAttribute(key, tagAttrs[key]);
-            }
-        );
+            );
+        }
     }
 
     attr(key, value) {
@@ -57,7 +65,12 @@ class DomNode {
 
     appendAfter(child, refChild) {
         let refDom = unpackDom(refChild);
-        this.dom.insertBefore(child.dom, refDom.nextSibling);
+        if (refDom.nextSibling) {
+            this.dom.insertBefore(child.dom, refDom.nextSibling);
+        } else {
+            // append after last child, append directly
+            this.dom.append(child.dom);
+        }
     }
 
     appendBefore(child, refChild) {
@@ -71,6 +84,7 @@ class DomCollection {
         this.parent = null;
         this.parentTag = null;
         this.children = [];
+        this.staticDomNodes = [];
         this.last = null;
         this.first = null;
         this.lastCollection = false;
@@ -79,8 +93,9 @@ class DomCollection {
 
         // the doms should be a slice of a same level children
         if (doms) {
-            this.last = doms[doms.length-1];
-            this.first = doms[0];
+            this.last = unpackDom(doms[doms.length-1]);
+            this.first = unpackDom(doms[0]);
+            this.staticDomNodes = doms;
         }
     }
 
@@ -89,8 +104,8 @@ class DomCollection {
             // remove from the old parent, add to the new one.
         }
         let tag = createElement(tagName, tagAttrs);
-        // add current as children
-        this.domNodes.forEach((dom) => {
+        // add static dom nodes as children
+        this.staticDomNodes.forEach((dom) => {
             tag.append(dom);
         });
         this.parent = new DomCollection([tag]);
@@ -113,7 +128,7 @@ class DomCollection {
 
     addSubCollection(collection) {
         collection.parent = this;
-        collection.first = this.first;
+        collection.first = this.last;
         collection.last = this.last;
         collection.lastCollection = true;
         if (!this.children.length) {
@@ -125,57 +140,77 @@ class DomCollection {
         this.children.push(collection);
     }
 
+    offerSubCollection(collection) {
+        collection.parent = this;
+        collection.first = this.first;
+        collection.last = this.first;
+        collection.lastCollection = true;
+        if (!this.children.length) {
+            collection.firstCollection = true;
+        }
+        else if (this.children.length >= 1) {
+            this.children[0].firstCollection = false;
+        }
+        this.children.unshift(collection);
+    }
+
     removeSubCollection(collection) {
-        // to-do
         if (collection.parent !== this) {
             return;
         }
         collection.parent = null;
-        this.children.splice(this.children.indexOf(collection), 1);
+        const pos = this.children.indexOf(collection);
+        this.children.splice(pos, 1);
+        if (pos === 0) {
+            this.updateFirst(this.children[0].first);
+        }
+        if (pos === this.children.length + 1) {
+            this.updateLast(this.children[this.children.length - 1].last);
+        }
+        
     }
 
     append(tagName, tagAttrs) {
         let tag = createElement(tagName, tagAttrs);
-        this.add([tag]);
+        this.staticDomNodes.push(tag);
         return this;
     }
 
     prepend(tagName, tagAttrs) {
         let tag = createElement(tagName, tagAttrs);
-        this.offer([tag]);
+        this.staticDomNodes.unshift(tag);
         return this;
     }
 
     modifyTemplate(method) {
-        return () => {
-            for (let i = 0; i < arguments.length; i+=1) {
-                let node = arguments[i];
-                if (this.parentTag) {
-                    this.parentTag[method](node);
-                } else {
-                    const parentTag = this.findRoot();
-                    if (parentTag) {
-                        parentTag[method](node);
-                    }
+        for (let i = 1; i < arguments.length; i+=1) {
+            if (this.parentTag) {
+                this.parentTag[method](arguments[i]);
+            } else {
+                const parentTag = this.findRoot().parentTag;
+                if (parentTag) {
+                    parentTag[method](arguments[i]);
                 }
             }
-            return this;
         }
+        return this;
     }
 
     add () {
-        if (!this.last) {
-            this.modifyTemplate("append")(...arguments);
-            this.last = unpackDom(arguments[arguments.length - 1]);
+        if (!this.first && !this.last) {
+            this.modifyTemplate("append", ...arguments);
+            this.updateLast(unpackDom(arguments[arguments.length - 1]));
+            this.updateFirst(unpackDom(arguments[0]));
         } else {
             this.addAfter(...arguments, this.last);
         }
     };
 
     offer () { 
-        if (!this.first) {
-            this.modifyTemplate("prepend")(...arguments);
-            this.first = unpackDom(arguments[0]);
+        if (!this.first && !this.last) {
+            this.modifyTemplate("prepend", ...arguments);
+            this.updateLast(unpackDom(arguments[arguments.length - 1]));
+            this.updateFirst(unpackDom(arguments[0]));
         } else {
             this.addBefore(...arguments, this.first);
         }
@@ -222,7 +257,7 @@ class DomCollection {
             }
         }
         if (this.last === refnode) {
-            this.last = this.updateLast(refnode);
+            this.updateLast(arguments[arguments.length - 2]);
         }
         return this;
     }
@@ -245,7 +280,7 @@ class DomCollection {
             }
         }
         if (this.first === refnode) {
-            this.updateFirst(refnode);
+            this.updateFirst(arguments[0]);
         }
     }
 
