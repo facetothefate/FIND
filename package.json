@@ -16,5 +16,8 @@
   "devDependencies": {
     "webpack": "^4.14.0",
     "webpack-cli": "^3.0.8"
+  },
+  "dependencies": {
+    "everpolate": "0.0.3"
   }
 }

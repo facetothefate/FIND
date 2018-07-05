@@ -100,5 +100,16 @@
             .bind(nestedArrayData)
             .inject(document.getElementById("nestedArray"));
         </script>
+
+        <div>
+            <svg id="svgAxis" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <script>
+            let axis = FIND.axis.left();
+            let interpolate = FIND.interpolate.linear();
+            interpolate.scope([0, 20000]);
+            interpolate.value([0, 200]);
+            axis.get(interpolate).inject(document.getElementById("svgAxis"));
+        </script>
     </body>
 </html>

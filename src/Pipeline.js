@@ -9,8 +9,8 @@ class Pipeline {
         this.data = null;
     }
 
-    outter(tagName, tagAttrs) {
-        this.collection = this.collection.outter(tagName, tagAttrs);
+    outter(tagName, tagAttrs, ns) {
+        this.collection = this.collection.outter(tagName, tagAttrs, ns);
         return this;
     }
 

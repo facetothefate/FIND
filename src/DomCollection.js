@@ -1,7 +1,15 @@
-import {Shapes, getShape} from "./Shapes";
+const Namespaces = {
+    "svg" : "http://www.w3.org/2000/svg"
+}
+
 
 function createElement (tagName, tagAttrs) {
     let tag = new DomNode(tagName, tagAttrs);
+    return tag;
+}
+
+function createSVGElement (tagName, tagAttrs) {
+    let tag = new DomNode(tagName, tagAttrs, "svg");
     return tag;
 }
 
@@ -13,20 +21,39 @@ function unpackDom (domNode) {
     }
 }
 
+function toCssName (key) {
+    for(let i = 0; i < key.length; i+=1) {
+        if (key[i] === key.toUpperCase()) {
+            return `${key.substring(0, i)}-${toCssName(key.substring(i, key.length))}`;
+        }
+    }
+    return key;
+}
+
 // User interface to handle dom 
 class DomNode {
-    constructor(tagName, tagAttrs) {
-        this.dom = document.createElement(tagName);
+    constructor(tagName, tagAttrs, namespace) {
+        if (!namespace) {
+            this.dom = document.createElement(tagName);
+        } else{
+            this.dom = document.createElementNS(Namespaces[namespace],tagName);
+        }
         if (tagAttrs) {
             Object.keys(tagAttrs).forEach(
                 (key) =>{
                     if (key === "text") {
-                        this.dom.innerText = tagAttrs[key];
+                        if (this.dom.namespaceURI === Namespaces["svg"]) {
+                            this.dom.textContent = tagAttrs[key];
+                        } else {
+                            this.dom.innerText = tagAttrs[key] + "";
+                        }
                     } else if (key === "on"){
                         const eventHandler = tagAttrs[key];
                         Object.keys(eventHandler).forEach((event)=>{
                             this.dom[`on${event}`] = tagAttrs[key][event];
                         });
+                    } else if (key === "style") {
+                        this.style(tagAttrs[key]);
                     } else {
                         this.dom.setAttribute(key, tagAttrs[key]);
                     }
@@ -40,13 +67,27 @@ class DomNode {
         return this;
     }
 
+    style (styleObject) {
+        let style = "";
+        Object.keys(styleObject).forEach((key)=>{
+            const item = toCssName(key);
+            style += `${item}:${styleObject[key]};`;
+        });
+        this.dom.style = style;
+        return this;
+    }
+
     on (event, callback) {
         this.dom[`on${event}`] = callback;
         return this;
     }
 
     text(value) {
-        this.dom.innerText = value;
+        if (this.dom.namespaceURI === Namespaces["svg"]) {
+            this.dom.textContent = value;
+        } else {
+            this.dom.innerText = value;
+        }
         return this;
     }
 
@@ -99,11 +140,11 @@ class DomCollection {
         }
     }
 
-    outter(tagName, tagAttrs) {
+    outter(tagName, tagAttrs, ns) {
         if (this.parentTag) {
             // remove from the old parent, add to the new one.
         }
-        let tag = createElement(tagName, tagAttrs);
+        let tag = new DomNode(tagName, tagAttrs, ns);
         // add static dom nodes as children
         this.staticDomNodes.forEach((dom) => {
             tag.append(dom);
@@ -313,4 +354,4 @@ class DomCollection {
     }
 }
 
-export {createElement, DomCollection};
+export {createElement, createSVGElement, DomCollection};
