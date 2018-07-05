@@ -1,44 +1,36 @@
+import { DomCollection } from "./DomCollection";
+import {Shapes, getShape} from "./Shapes";
 
-const Shapes = Object.freeze({
-    ARRAY : Symbol('array'),
-    COMPLEX : Symbol('complex'),
-    SIMPLE : Symbol('simple'),
-    FUNCTION : Symbol('function')
-}); 
 
-function getShape(data) {
-    if (Array.isArray(data)) {
-        return Shapes.ARRAY;
-    } else if (Object.prototype.toString.call(data) === '[object Object]') {
-        return Shapes.COMPLEX;
-    }  else if (Object.prototype.toString.call(data) === '[object Function]') {
-        return Shapes.FUNCTION;
-    }
-    return Shapes.SIMPLE;
-}
-
-function createImmu(value, render) {
+// Factory method
+function createImmu(value, render, domCollection) {
     let vshape = getShape(value);
     let rshape = getShape(render);
     switch (vshape) {
         case Shapes.ARRAY:
-            return new ArrayImmutabel(value, render);
+            return new ArrayImmutabel(value, render, domCollection);
         case Shapes.COMPLEX:
             // if user gives out a speific key, then we create as a complex
             // if user wish to use the whole object as a single value we create as a simple
             // which makes the following can happen:
             // <div> data.body </div>
             if (rshape === Shapes.ARRAY) {
-                return new ComplexImmutabel(value, render);
+                return new ComplexImmutabel(value, render, domCollection);
             } else if (rshape === Shapes.FUNCTION) {
-                return new SimpleImmutabel(value, render);
+                return new SimpleImmutabel(value, render, domCollection);
             }
         default:
-            return new SimpleImmutabel(value, render);
+            return new SimpleImmutabel(value, render, domCollection);
     }
 }
 
 class ImmutabelInterface {
+    constructor(collection) {
+        this.collection = new DomCollection();
+        if (collection) {
+            collection.addSubCollection(this.collection);
+        }
+    }
     get() {
         throw Error("Not done");
     }
@@ -58,15 +50,16 @@ class ImmutabelInterface {
     getVersion() {
         throw Error("Not done");
     }
-
+    // return rendered results
+    // this ether return a DomCollection
     getRendered() {
-        throw Error("Not done");
+        return this.collection;
     }
 }
 
 class SimpleImmutabel extends ImmutabelInterface{
-    constructor(data, render) {
-        super();
+    constructor(data, render, collection) {
+        super(collection);
         if (getShape(render) !== Shapes.FUNCTION) {
             throw Error(`Cannot bind ${JSON.stringify(data)} to a complex renderset`);
         }
@@ -95,16 +88,9 @@ class SimpleImmutabel extends ImmutabelInterface{
     }
 
     delete() {
-        // just record it's been deleted
-        if (this.deleteVerison !== null) {
-            this.version = this.deleteVerison;
-        } else {
-            this.deleteVerison = this.history.length - 1;
-            const p = this.elem.dom.parent;
-            if (p) {
-                p.remove(this.elem.dom);
-            }
-        }
+        this.version += 1;
+        this.deleteVerison = this.version;
+        this.collection.remove(this.elem);
     }
 
     isDelete() {
@@ -115,9 +101,6 @@ class SimpleImmutabel extends ImmutabelInterface{
         return this.version;
     }
 
-    getRendered() {
-        return [this.elem];
-    }
 
     bind(render) {
         this.render = render;
@@ -127,15 +110,11 @@ class SimpleImmutabel extends ImmutabelInterface{
     doRender() {
         let elem = this.render(this.get(), this.elem);
         if (!this.elem) {
-            this.elem = elem;
+            this.collection.add(this.elem);
             return;
         }
         if (elem !== this.elem) {
-            const p = this.elem.dom.parent;
-            if (p) {
-                p.remove(this.elem.dom);
-                p.append(elem.dom);
-            }
+            this.collection.replace(this.elem);
         }
         this.elem = elem;
     }
@@ -143,8 +122,8 @@ class SimpleImmutabel extends ImmutabelInterface{
 
 
 class ArrayImmutabel extends ImmutabelInterface {
-    constructor(data, renders) {
-        super();
+    constructor(data, renders, collection) {
+        super(collection);
         if (getShape(data) !== Shapes.ARRAY) {
             throw Error(`${JSON.stringify(data)} is not an array data`);
         }
@@ -159,9 +138,6 @@ class ArrayImmutabel extends ImmutabelInterface {
         this.keptVer = 0;
         this.version = 0;
         this.data = data;
-        if (renders) {
-            
-        }
         this.renders = new Map(renders);
         this.settedRenders = {};
         // the renders format should like this:
@@ -175,17 +151,16 @@ class ArrayImmutabel extends ImmutabelInterface {
                 if (key === "*") {
                     for(let i = 0; i < data.length; i+=1) {
                         if (false === i in this.settedRenders) {
-                            this.content[i] = createImmu(data[i], renderSet);
+                            this.content[i] = createImmu(data[i], renderSet, this.collection);
                             this.currentVersion[i] = 0;
                         }
                     }
                 } else if (Number.isInteger(key)) {
-                    this.content[key] = createImmu(data[key], renderSet);
+                    this.content[key] = createImmu(data[key], renderSet, this.collection);
                     this.currentVersion[i] = 0;
                     this.settedRenders[key] = true;
                 }
-
-                // another key we ignore
+                // another keys we ignore to save memory
             }
         );
 
@@ -209,42 +184,33 @@ class ArrayImmutabel extends ImmutabelInterface {
                 }
             },
             push:() => {
-                let diffs = [];
                 for (let i = 0; i < arguments.length; i+=1) {
                     let render = this.renders.get(i);
                     if (!render) {
                         render = this.renders.get("*");
                     }
                     if (render) {
-                        this.content.push(createImmu(arguments[i], this.renders.get(i)));
+                        this.content.push(createImmu(arguments[i], this.renders.get(i), this.collection));
                         this.currentVersion.push(0);
-                        diffs.push(this.content[this.content.length - 1]);
                     }
                 }
                 if (arguments.length) {
                     this.version += 1;
-                    if (this.collection) {
-                        this.collection.add(diffs);
-                    }
                 }
             },
             pop:() => {
                 this.currentVersion.pop();
                 const res = this.content.pop();
                 this.version += 1;
-                const ret =  res.get();
+                const ret = res.get();
                 res.delete();
                 return ret;
             },
             sort:() => {
-                this.content.sort();
-                this.currentVersion.sort();
-                this.version += 1;
+                throw Error("Please sort the data before bind to the Pipline!");
             },
             reverse: () => {
-                this.content.reverse();
-                this.currentVersion.reverse();
-                this.version += 1;
+                throw Error("Please Reverse the data before bind to the Pipline!");
             },
             shift:() => {
                 const res = this.content.shift();
@@ -264,17 +230,17 @@ class ArrayImmutabel extends ImmutabelInterface {
                 return ret;
             },
             unshift:() => {
+                // not support for now, need insert sub collection at the very beginning
+                /*
                 let i = 0;
-                const diffs = [];
                 for (i = 0; i < arguments.length; i+=1) {
                     let render = this.renders.get(i);
                     if (!render) {
                         render = this.renders.get("*");
                     }
                     if (render) {
-                        this.content.unshift(createImmu(arguments[i], this.renders.get(i)));
+                        this.content.unshift(createImmu(arguments[i], this.renders.get(i), this.collection));
                         this.currentVersion.unshift(0);
-                        diffs.unshift(this.content[0].getRendered());
                     }
                 }
                 for ( ;i < this.content.length; i+= 1) {
@@ -288,12 +254,11 @@ class ArrayImmutabel extends ImmutabelInterface {
                 }
                 if (arguments.length) {
                     this.version += 1;
-                    if (this.collection) {
-                        this.collection.add(diffs);
-                    }
-                }
+                }*/
             },
             splice:() => {
+                // not support for now, need remove a sub collection from current collection
+                /*
                 let start = arguments[0];
                 let changed = false;
                 this.content.splice(...arguments);
@@ -315,7 +280,7 @@ class ArrayImmutabel extends ImmutabelInterface {
 
                 if (changed) {
                     this.version += 1;
-                }
+                }*/
             },
         }
     }
@@ -402,25 +367,8 @@ class ArrayImmutabel extends ImmutabelInterface {
         });
     }
 
-    getRendered() {
-        let res = [];
-        this.currentVersion.forEach(
-            (v, index)=>{
-                res = res.concat(this.content[index].getRendered());
-            }
-        );
-        return res;
-    }
-
     model() {
         return this.dataModel;
-    }
-
-    bindCollection(collection) {
-        if (this.collection !== collection) {
-            this.collection = collection;
-            this.collection.add(this.getRendered());
-        }
     }
 }
 
@@ -432,8 +380,8 @@ class ComplexImmutabel extends ImmutabelInterface {
      *  or it can be even nested
      *  [[key, [subkey, renderfunc]]]
      */
-    constructor(data, renders) {
-        super();
+    constructor(data, renders, collection) {
+        super(collection);
         if (getShape(data) !== Shapes.COMPLEX) {
             throw Error(`${JSON.stringify(data)} is not a complex data`);
         }
@@ -444,14 +392,18 @@ class ComplexImmutabel extends ImmutabelInterface {
         this.keptVer = 0;
         this.renders = new Map(renders);
         this.currentVersion = new Map();
-
+        this.collection = new DomCollection();
         this.renders.forEach(
             (renderSet, key) => {
                 if (false === key in data) {
                     return;
                 }
-                this.content.set(key, createImmu(data[key], renderSet));
-                this.currentVersion.set(key, 0);   
+                this.content.set(key, createImmu(data[key], renderSet, this.collection));
+                this.currentVersion.set(key, 0);
+                let renderRes = this.content.get(key).getRendered();
+                if (renderRes) {
+                    this.collection.add(renderRes);
+                }
             }
         );
         this.dataModel = this.createProxy(data);
@@ -481,7 +433,7 @@ class ComplexImmutabel extends ImmutabelInterface {
                     return;
                 }
                 // this is a new key
-                this.content.set(key, createImmu(value, this.renders[key]));
+                this.content.set(key, createImmu(value, this.renders[key], this.collection));
                 this.currentVersion.set(key, this.content.get(key).getVersion());
                 this.version += 1;
                 
@@ -546,11 +498,8 @@ class ComplexImmutabel extends ImmutabelInterface {
                         changed = true;
                     }
                 } else {
-                    this.content.set(key, createImmu(data[key], this.renders[key]));
+                    this.content.set(key, createImmu(data[key], this.renders[key], this.collection));
                     this.currentVersion.set(key, 0);
-                    if (this.collection) {
-                        this.collection.add([this.content.get(key).getRendered()]);
-                    }
                 }
             }
         );
@@ -566,16 +515,6 @@ class ComplexImmutabel extends ImmutabelInterface {
         return this.version;
     }
 
-    getRendered() {
-        let res = [];
-        this.currentVersion.forEach(
-            (v, key)=>{
-                res = res.concat(this.content.get(key).getRendered());
-            }
-        );
-        return res;
-    }
-
     bind(renders) {
         this.renders = renders;
         this.renders.forEach(
@@ -587,13 +526,6 @@ class ComplexImmutabel extends ImmutabelInterface {
 
     model() {
         return this.dataModel;
-    }
-
-    bindCollection(collection) {
-        if (this.collection !== collection) {
-            this.collection = collection;
-            this.collection.add(this.getRendered());
-        }
     }
 }
 

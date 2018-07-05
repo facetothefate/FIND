@@ -35,8 +35,7 @@ class Pipeline {
         }
         this.data = data;
         if (!this.content) {  
-            this.content = createImmu(data, this.renderAssignment);
-            this.content.bindCollection(this.initCollection);
+            this.content = createImmu(data, this.renderAssignment, this.initCollection);
         } else {
             this.content.set(data);
         }
@@ -44,7 +43,7 @@ class Pipeline {
     }
 
     inject(rootDom) {
-        rootDom.append(this.collection.domNodes[0].dom);
+        rootDom.append(this.collection.first);
         return this;
     }
 

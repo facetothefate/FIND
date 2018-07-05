@@ -1,8 +1,19 @@
+import {Shapes, getShape} from "./Shapes";
+
 function createElement (tagName, tagAttrs) {
     let tag = new DomNode(tagName, tagAttrs);
     return tag;
 }
 
+function unpackDom (domNode) {
+    if (domNode instanceof DomNode) {
+        return domNode.dom;
+    } else {
+        return domNode;
+    }
+}
+
+// User interface to handle dom 
 class DomNode {
     constructor(tagName, tagAttrs) {
         this.dom = document.createElement(tagName);
@@ -43,6 +54,16 @@ class DomNode {
     prepend (child) {
         this.dom.prepend(child.dom);
     }
+
+    appendAfter(child, refChild) {
+        let refDom = unpackDom(refChild);
+        this.dom.insertBefore(child.dom, refDom.nextSibling);
+    }
+
+    appendBefore(child, refChild) {
+        let refDom = unpackDom(refChild);
+        this.dom.insertBefore(child.dom, refDom);
+    }
 }
 
 class DomCollection {
@@ -50,9 +71,16 @@ class DomCollection {
         this.parent = null;
         this.parentTag = null;
         this.children = [];
-        this.domNodes = [];
+        this.last = null;
+        this.first = null;
+        this.lastCollection = false;
+        this.firstCollection = false;
+        this.size = 0;
+
+        // the doms should be a slice of a same level children
         if (doms) {
-            this.domNodes = doms;
+            this.last = doms[doms.length-1];
+            this.first = doms[0];
         }
     }
 
@@ -71,6 +99,41 @@ class DomCollection {
         return this.parent;
     }
 
+    findRoot() {
+        let parentCollection = this.parent;
+        if (!parentCollection) {
+            return null;
+        }
+        if (parentCollection.parentTag) {
+            return parentCollection;
+        } else {
+            return parentCollection.findRoot();
+        }
+    }
+
+    addSubCollection(collection) {
+        collection.parent = this;
+        collection.first = this.first;
+        collection.last = this.last;
+        collection.lastCollection = true;
+        if (!this.children.length) {
+            collection.firstCollection = true;
+        }
+        else if (this.children.length >= 1) {
+            this.children[this.children.length - 1].lastCollection = false;
+        }
+        this.children.push(collection);
+    }
+
+    removeSubCollection(collection) {
+        // to-do
+        if (collection.parent !== this) {
+            return;
+        }
+        collection.parent = null;
+        this.children.splice(this.children.indexOf(collection), 1);
+    }
+
     append(tagName, tagAttrs) {
         let tag = createElement(tagName, tagAttrs);
         this.add([tag]);
@@ -83,24 +146,135 @@ class DomCollection {
         return this;
     }
 
-    add(nodes) {
-        nodes.forEach((node)=>{
-            this.domNodes.push(node);
-            if (this.parentTag) {
-                this.parentTag.append(node);
+    modifyTemplate(method) {
+        return () => {
+            for (let i = 0; i < arguments.length; i+=1) {
+                let node = arguments[i];
+                if (this.parentTag) {
+                    this.parentTag[method](node);
+                } else {
+                    const parentTag = this.findRoot();
+                    if (parentTag) {
+                        parentTag[method](node);
+                    }
+                }
             }
-        });
+            return this;
+        }
+    }
+
+    add () {
+        if (!this.last) {
+            this.modifyTemplate("append")(...arguments);
+            this.last = unpackDom(arguments[arguments.length - 1]);
+        } else {
+            this.addAfter(...arguments, this.last);
+        }
+    };
+
+    offer () { 
+        if (!this.first) {
+            this.modifyTemplate("prepend")(...arguments);
+            this.first = unpackDom(arguments[0]);
+        } else {
+            this.addBefore(...arguments, this.first);
+        }
+
+    }
+
+    remove (node) {
+        if (this.size === 0) {
+            return;
+        }
+        const nodeDom = unpackDom(node);
+        this.size -= 1;
+        if (this.first === nodeDom) {
+            this.first = this.updateFirst(this.first.nextSibling);
+        }
+        else if (this.last === nodeDome) {
+            this.last = this.updateLast(this.last.previousSibling);
+        }
+        if (this.parentTag) {
+            this.parentTag.remove(node);
+        } else {
+            const parentTag = this.findRoot().parentTag;
+            if (parentTag) {
+                parentTag.remove(node);
+            }
+        }
+    }
+
+    addAfter() {
+        if (arguments.length < 2) {
+            throw Error("addAfter need at least one node and one refnode");
+        }
+        this.size += 1;
+        let refnode =  arguments[arguments.length - 1];
+        for (let i = 0; i < arguments.length-1; i+=1) { 
+            let node = arguments[i];
+            if (this.parentTag) {
+                this.parentTag.appendAfter(node, refnode);
+            } else {
+                const parentTag = this.findRoot().parentTag;
+                if (parentTag) {
+                    parentTag.appendAfter(node, refnode);
+                }
+            }
+        }
+        if (this.last === refnode) {
+            this.last = this.updateLast(refnode);
+        }
         return this;
     }
 
-    offer(nodes) {
-        nodes.forEach((node)=>{
-            this.domNodes.unshift(node);
+    addBefore() {
+        if (arguments.length < 2) {
+            throw Error("addAfter need at least one node and one refnode");
+        }
+        this.size += 1;
+        let refnode =  arguments[arguments.length - 1];
+        for (let i = 0; i < arguments.length-1; i+=1) { 
+            let node = arguments[i];
             if (this.parentTag) {
-                this.parentTag.prepend(node);
+                this.parentTag.appendBefore(node, refnode);
+            } else {
+                const parentTag = this.findRoot().parentTag;
+                if (parentTag) {
+                    parentTag.appendBefore(node, refnode);
+                }
             }
-        });
-        return this;
+        }
+        if (this.first === refnode) {
+            this.updateFirst(refnode);
+        }
+    }
+
+    replace(node) {
+        const refnode = node.dom.nextSibling;
+        this.remove(node);
+        this.addAfter(node, refnode);
+    }
+
+    updateLast(last){
+        let parentCollection = this.parent;
+        this.last = last;
+        if (!parentCollection) {
+            return;
+        }
+        if (parentCollection.lastCollection) {
+            parentCollection.updateLast(last);
+        }
+    }
+
+    updateFirst(first){
+        let parentCollection = this.parent;
+        this.first = first;
+        if (!parentCollection) {
+            return;
+        }
+        if (parentCollection.firstCollection) {
+            parentCollection.updateFirst(first);
+        }
     }
 }
 
