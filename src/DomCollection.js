@@ -23,8 +23,10 @@ function unpackDom (domNode) {
 
 function toCssName (key) {
     for(let i = 0; i < key.length; i+=1) {
-        if (key[i] === key.toUpperCase()) {
-            return `${key.substring(0, i)}-${toCssName(key.substring(i, key.length))}`;
+        if (key[i] === key[i].toUpperCase()) {
+            return `${key.substring(0, i)}-${
+                toCssName( 
+                    key[i].toLowerCase() + key.substring(i + 1, key.length))}`;
         }
     }
     return key;
@@ -68,12 +70,12 @@ class DomNode {
     }
 
     style (styleObject) {
-        let style = "";
-        Object.keys(styleObject).forEach((key)=>{
-            const item = toCssName(key);
-            style += `${item}:${styleObject[key]};`;
-        });
-        this.dom.style = style;
+        let style = 
+            Object.keys(styleObject).map((key)=>{
+                const item = toCssName(key);
+                return `${item}:${styleObject[key]}`;
+            });
+        this.dom.setAttribute("style", style.join(";"));
         return this;
     }
 

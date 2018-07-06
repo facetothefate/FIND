@@ -30,9 +30,6 @@ class Pipeline {
     }
     
     bind(data) {
-        if (this.initCollection === this.collection) {
-            throw Error("pipline should at least have one 'outter' element");
-        }
         this.data = data;
         if (!this.content) {  
             this.content = createImmu(data, this.renderAssignment);
@@ -45,7 +42,23 @@ class Pipeline {
     }
 
     inject(rootDom) {
-        rootDom.append(this.collection.first);
+        if (!this.data) {
+            throw Error("Cannot inject pipeline without binding any data");
+        }
+        if (this.collection.first) {
+            // we have at least one outter element for this pipline
+            rootDom.append(this.collection.first);
+        } else {
+            // we don't have any outter element
+            // the real rendered collection is the init collection's first children
+            const renderedCollection = this.initCollection.children[0];
+            let now = renderedCollection.first;
+            while(now !== renderedCollection.last) {
+                rootDom.append(now);
+                now = now.nextSibling;
+            }
+            renderedCollection.parentTag = rootDom;
+        }
         return this;
     }
 
