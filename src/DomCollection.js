@@ -99,11 +99,11 @@ class DomNode {
     }
 
     append (child) {
-        this.dom.append(child.dom);
+        this.dom.append(unpackDom(child));
     }
 
     prepend (child) {
-        this.dom.prepend(child.dom);
+        this.dom.prepend(unpackDom(child));
     }
 
     appendAfter(child, refChild) {
@@ -216,12 +216,14 @@ class DomCollection {
     append(tagName, tagAttrs) {
         let tag = createElement(tagName, tagAttrs);
         this.staticDomNodes.push(tag);
+        this.last = tag.dom;
         return this;
     }
 
     prepend(tagName, tagAttrs) {
         let tag = createElement(tagName, tagAttrs);
         this.staticDomNodes.unshift(tag);
+        this.first = tag.dom;
         return this;
     }
 

@@ -36,7 +36,7 @@
             ])
             .outter("div",{})
             .prepend("h1", {text:"Object binding"})
-            .outter("div",{class:"test"});
+            .outter("div",{class:"test"}).create();
 
             
             data = pipeline.bind(data).inject(document.getElementById("basicUsageObject")).model();
@@ -52,7 +52,7 @@
             ])
             .outter("ul",{})
             .prepend("h1", {text:"Array binding"})
-            .outter("div",{})
+            .outter("div",{}).create()
             .bind(arrayData)
             .inject(document.getElementById("basicUsageArray"));
         </script>
@@ -96,9 +96,44 @@
                         }
                     }, 
                 text:"add"})
-            .outter("div",{})
+            .outter("div",{}).create()
             .bind(nestedArrayData)
             .inject(document.getElementById("nestedArray"));
+        </script>
+
+        <div id="subPipeline">
+        </div>
+        <script>
+            const subPipelineData = [
+                {
+                    title : "Title 1",
+                    body : "Body 1",
+                },
+                {
+                    title : "What a great Title!",
+                    body : "Body 2"
+                }
+            ];
+            const subPipelineChild = FIND.Pipeline([
+                        ["title", 
+                            (data) => FIND.element("h4",{text:data})
+                        ],
+                        ["body",
+                            (data) => FIND.element("p",{text:data})
+                        ]
+                    ]).outter("div");
+            const subPipeParent = FIND.Pipeline([["*", (data, element)=>{
+                if (!element) {
+                    const e = FIND.element("div");
+                    e.pipeline = subPipelineChild.create();
+                    e.pipeline.bind(data).inject(e);
+                    return e;
+                } else {
+                    e.pipeline.bind(data);
+                }
+            }]]).outter("div",{})
+                .prepend("h1", {text:"Subpipelines"}).create()
+                .bind(subPipelineData).inject(document.getElementById("nestedArray"));
         </script>
 
         <div>

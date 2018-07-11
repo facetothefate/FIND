@@ -1,11 +1,11 @@
-import PipelineClass from "../src/Pipeline";
+import {PipelineFactory} from "../src/Pipeline";
 import {StepInterpolate, LinearInterpolate, PolynomialInterpolate} from "../src/math";
 import {createElement, createSVGElement} from "./DomCollection";
 import {axisLeft, axisRight, axisTop, axisBottom} from "./Axis";
 
 
 function Pipeline() {
-    return new PipelineClass(...arguments);
+    return new PipelineFactory(...arguments);
 }
 
 function element(tagName, tagAttrs) {

@@ -1,4 +1,4 @@
-import Pipeline from "./Pipeline"
+import {Pipeline} from "./Pipeline"
 import {createSVGElement} from "./DomCollection";
 
 // factory functions
